@@ -1,5 +1,5 @@
 .idea/*
 out/*
+base
 *.iml
 *Test.java
-base/*
