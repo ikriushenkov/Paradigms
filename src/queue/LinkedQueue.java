@@ -5,7 +5,7 @@ public class LinkedQueue extends AbstractQueue {
     private Node end;
 
     @Override
-    protected void myEnqueue(Object element) {
+    protected void furtherEnqueue(Object element) {
         end = new Node(element, end, null);
         if (size == 1) {
             begin = end;
@@ -13,17 +13,17 @@ public class LinkedQueue extends AbstractQueue {
     }
 
     @Override
-    protected Object myElement() {
+    protected Object furtherElement() {
         return begin.value;
     }
 
     @Override
-    protected void myDequeue() {
+    protected void furtherDequeue() {
         begin = begin.next;
     }
 
     @Override
-    protected void myClear() {
+    protected void furtherClear() {
         end = begin = null;
     }
 

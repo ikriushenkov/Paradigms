@@ -9,29 +9,29 @@ public abstract class AbstractQueue implements Queue {
         assert element != null;
 
         size++;
-        myEnqueue(element);
+        furtherEnqueue(element);
     }
 
-    protected abstract void myEnqueue(Object element);
+    protected abstract void furtherEnqueue(Object element);
 
     public Object element() {
         assert size > 0;
 
-        return myElement();
+        return furtherElement();
     }
 
-    protected abstract Object myElement();
+    protected abstract Object furtherElement();
 
     public Object dequeue() {
         assert size > 0;
 
         Object result = element();
         size--;
-        myDequeue();
+        furtherDequeue();
         return result;
     }
 
-    protected abstract void myDequeue();
+    protected abstract void furtherDequeue();
 
     public int size() {
         return size;
@@ -43,10 +43,10 @@ public abstract class AbstractQueue implements Queue {
 
     public void clear() {
         size = 0;
-        myClear();
+        furtherClear();
     }
 
-    protected abstract void myClear();
+    protected abstract void furtherClear();
 
     public void removeIf(Predicate<Object> predicate) {
         int n = size;
@@ -70,16 +70,24 @@ public abstract class AbstractQueue implements Queue {
     }
 
     public void takeWhile(Predicate<Object> predicate) {
+        takeWhile(predicate, false);
+    }
+
+    private void takeWhile(Predicate<Object> predicate, boolean isDelete) {
         LinkedQueue temp = new LinkedQueue();
         while (!this.isEmpty() && predicate.test(this.element())) {
-            temp.enqueue(this.dequeue());
+            if (isDelete) {
+                this.dequeue();
+            } else {
+                temp.enqueue(this.dequeue());
+            }
         }
-        this.equate(temp);
+        if (!isDelete) {
+            this.equate(temp);
+        }
     }
 
     public void dropWhile(Predicate<Object> predicate) {
-        while (!this.isEmpty() && predicate.test(this.element())) {
-            this.dequeue();
-        }
+        takeWhile(predicate, true);
     }
 }

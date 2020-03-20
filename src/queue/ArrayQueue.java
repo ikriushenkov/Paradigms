@@ -7,7 +7,7 @@ public class ArrayQueue extends AbstractQueue {
     private Object[] elements = new Object[5];
 
     @Override
-    protected void myEnqueue(Object element) {
+    protected void furtherEnqueue(Object element) {
         ensureCapacity(size);
         head = (head + 1) % elements.length;
         elements[head] = element;
@@ -22,17 +22,17 @@ public class ArrayQueue extends AbstractQueue {
     }
 
     @Override
-    protected Object myElement() {
+    protected Object furtherElement() {
         return elements[tail()];
     }
 
     @Override
-    protected void myDequeue() {
+    protected void furtherDequeue() {
         // Do nothing
     }
 
     @Override
-    protected void myClear() {
+    protected void furtherClear() {
         head = 0;
     }
 
