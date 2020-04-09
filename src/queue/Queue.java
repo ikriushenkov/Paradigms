@@ -32,25 +32,25 @@ public interface Queue {
     void clear();
 
     // Pre: predicate != null
-    // Post: для всех i: predicate.test(a[i]) is false, a' contains a[i] && (для всех i' и j' от 0 до
-    // size' - 1 существуют i и j от 0 до size - 1 такие, что a'[i'] == a[i] && a'[j'] == a[j]:
-    // i < j -> i' < 'j)
+    // Post: size' <= size && (для всех i: predicate(a[i]) is false, a' contains a[i] &&
+    // (для всех i' и j' от 0 до size' - 1 существуют i и j от 0 до size - 1 такие, что
+    // a'[i'] == a[i] && a'[j'] == a[j]: i < j -> i' < 'j))
     void removeIf(Predicate<Object> predicate);
 
     // Pre: predicate != null
-    // Post: для всех i: predicate.test(a[i]) is true, a' contains a[i] && (для всех i' и j' от 0 до
-    // size' - 1 существуют i и j от 0 до size - 1 такие, что a'[i'] == a[i] && a'[j'] == a[j]:
-    // i < j -> i' < 'j)
+    // Post: size' <= size && (для всех i: predicate(a[i]) is true, a' contains a[i] &&
+    // (для всех i' и j' от 0 до size' - 1 существуют i и j от 0 до size - 1 такие, что
+    // a'[i'] == a[i] && a'[j'] == a[j]: i < j -> i' < 'j))
     void retainIf(Predicate<Object> predicate);
 
     // Pre: predicate != null
-    // Post: для всех i от 0 до k: k - минимальное такое, что predicate(k) is false:
-    // a'[i] == a[i]
+    // Post: size' <= size && (для всех i от 0 до k: k - минимальное такое, что predicate(a[k]) is false:
+    // a'[i] == a[i])
     void takeWhile(Predicate<Object> predicate);
 
     // Pre: predicate != null
-    // Post: для всех i от 0 до k: k - минимальное такое, что predicate(k) is false:
+    // Post: size' <= size && (для всех i от 0 до k: k - минимальное такое, что predicate(a[k]) is false:
     // не находятся в a' && (для всех i' и j' от 0 до size' - 1 существуют i и j от k до size - 1 такие,
-    // что a'[i'] == a[i] && a'[j'] == a[j]: i < j -> i' < 'j)
+    // что a'[i'] == a[i] && a'[j'] == a[j]: i < j -> i' < 'j))
     void dropWhile(Predicate<Object> predicate);
 }
