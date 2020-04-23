@@ -1,6 +1,6 @@
 "use strict";
 
-const AbstractOperation = function(sign, apply, applyDiff) {
+const abstractOperation = function(sign, apply, applyDiff) {
     const op = function(...exprs) {
         return Operation.apply(this, exprs);
     };
@@ -9,24 +9,27 @@ const AbstractOperation = function(sign, apply, applyDiff) {
     op.prototype.apply = apply;
     op.prototype.applyDiff = applyDiff;
     return op;
-}
+};
 
 function Operation(...exprs) {
     this.exprs = exprs;
 }
 
 Operation.prototype.evaluate = function(...values) {
-    return this.apply(...this.exprs.map((expr) =>
-        expr.evaluate(...values)));
-}
+    return this.apply(...this.exprs.map(expr => expr.evaluate(...values)));
+};
 
 Operation.prototype.toString = function() {
     return this.exprs.join(" ") + " " + this.sign;
-}
+};
 
 Operation.prototype.diff = function(variable) {
     return this.applyDiff(...this.exprs, ...this.exprs.map((expr) =>
         expr.diff(variable)), variable);
+};
+
+Operation.prototype.prefix = function () {
+    return "(" + this.sign + " " + this.exprs.map((expr) => expr.prefix()).join(" ") + ")";
 }
 
 const AbstractValue = (evaluate, diff) => function (value) {
@@ -36,11 +39,12 @@ const AbstractValue = (evaluate, diff) => function (value) {
     this.prefix = this.toString;
 };
 
-const Const = AbstractValue((value) => value, () => ConstZero);
+const Const = AbstractValue((value) => value, () => Consts.ZERO);
 
-const ConstZero = new Const(0);
-const ConstOne = new Const(1);
-const ConstNegateTwo = new Const(-2);
+// :NOTE: Const.ZERO
+const Consts = {"ZERO" : new Const(0),
+    "ONE": new Const(1),
+    "NEGATETWO": new Const(-2)};
 
 const variables = {
     "x" : 0,
@@ -49,40 +53,52 @@ const variables = {
 };
 
 const Variable = AbstractValue((variable, ...values) => values[variables[variable]],
-    (variable, diffVariable) => variable === diffVariable ? ConstOne : ConstZero);
+    (variable, diffVariable) => variable === diffVariable ? Consts.ONE : Consts.ZERO);
 
-// :NOTE: Прототипы
-// :NOTE: копипаста
-// :NOTE: const Add = f("+", (a, b) => a + b, (variable) => new Add(a.diff(variable), b.diff(variable)));
-const Add = AbstractOperation("+",
+const Add = abstractOperation("+",
     (a, b) => a + b,
     (a, b, diffA, diffB) => new Add(diffA, diffB));
 
-const Subtract = AbstractOperation("-",
+const Subtract = abstractOperation("-",
     (a, b) => a - b,
     (a, b, diffA, diffB) => new Subtract(diffA, diffB));
 
-const Multiply = AbstractOperation("*",
+const Multiply = abstractOperation("*",
     (a, b) => a * b,
     (a, b, diffA, diffB) => new Add(new Multiply(diffA, b),
         new Multiply(a, diffB)));
 
-const Divide = AbstractOperation("/",
+const Divide = abstractOperation("/",
     (a, b) => a / b,
     (a, b, diffA, diffB) =>  new Divide(new Subtract(new Multiply(diffA, b),
         new Multiply(a, diffB)), new Multiply(b, b)));
 
-const Negate = AbstractOperation("negate",
+const Negate = abstractOperation("negate",
     (a) => -a,
     (a, diffA) => new Negate(diffA));
 
-const Gauss = AbstractOperation("gauss",
+const Gauss = abstractOperation("gauss",
     (a, b, c, x) => a * Math.exp(-((x - b) ** 2) / (2 * c ** 2)),
-    (a, b, c, x, diffA, diffB, diffC, diffX, variable) => new Add(new Multiply(diffA, new Gauss(ConstOne, b, c, x)),
-        new Multiply(a, new Multiply(new Gauss(ConstOne, b, c, x), new Divide(
-            new Multiply(new Subtract(x, b), new Subtract(x, b)), new Multiply(ConstNegateTwo,
+    (a, b, c, x, diffA, diffB, diffC, diffX, variable) => new Add(new Multiply(diffA, new Gauss(Consts.ONE, b, c, x)),
+        new Multiply(a, new Multiply(new Gauss(Consts.ONE, b, c, x), new Divide(
+            new Multiply(new Subtract(x, b), new Subtract(x, b)), new Multiply(Consts.NEGATETWO,
                 new Multiply(c, c))).diff(variable)))));
 
+const sum = function (...values) {
+    let s = 0;
+    for (let i = 0; i < values.length; i++) {
+        s += values[i];
+    }
+    return s / values.length;
+}
+
+const Mean = abstractOperation("mean",
+    (...values) => sum(...values));
+
+
+const Var = abstractOperation("var",
+    (...values) => -(sum(...values) ** 2) + (sum(...values.map((value) =>
+        value * value))));
 
 const operations = {
     "+": Add,
@@ -90,7 +106,9 @@ const operations = {
     "*": Multiply,
     "/": Divide,
     "negate" : Negate,
-    "gauss" : Gauss
+    "gauss" : Gauss,
+    "mean" : Mean,
+    "var" : Var
 };
 
 const lengthOfOperation = {
@@ -102,15 +120,22 @@ const lengthOfOperation = {
     "gauss" : 4
 };
 
+const anyLength = {
+    "mean" : 1,
+    "var" : 1
+};
+
+const isCorrectLength = (length, operation) => (operation in anyLength) ? true :
+    length === lengthOfOperation[operation];
+
 const parse = function (expression) {
     expression = expression.split(" ").filter((string) => string.length > 0);
-    let n = [];
+    let stack = [];
     for (let i = 0; i < expression.length; i++) {
         let expr = expression[i];
         if (expr in operations) {
             const length = lengthOfOperation[expr];
-            let exprs = n.splice(n.length - length, length);
-            expr = new operations[expr](...exprs);
+            expr = new operations[expr](...(stack.splice(-length)));
         } else {
             if (expr in variables) {
                 expr = new Variable(expr);
@@ -118,9 +143,9 @@ const parse = function (expression) {
                 expr = new Const(parseInt(expr));
             }
         }
-        n.push(expr);
+        stack.push(expr);
     }
-    return n[0];
+    return stack.pop();
 };
 
 const parsePrefix = function (expression) {
@@ -130,7 +155,13 @@ const parsePrefix = function (expression) {
     const nextExpr = () => expression[i++];
     const identificationParse = function (expr) {
         if (expr === '(') {
-            return parseOperation(nextExpr());
+            const expr = nextExpr();
+            if (expr in operations) {
+                return prefixParseOperation(expr);
+            } else {
+                i--;
+                return postfixParseOperation();
+            }
         } else {
             if (expr in variables) {
                 return new Variable(expr);
@@ -143,26 +174,43 @@ const parsePrefix = function (expression) {
             }
         }
     };
-    const parseOperation = function (operation) {
+    const postfixParseOperation = function () {
+        let stack = getStack();
+        i--;
+        let operation = nextExpr();
+        if (nextExpr() === ')') {
+            return parseOperation(stack, operation);
+        } else {
+            throw new Error("After " + operation + " expected )");
+        }
+    };
+    const prefixParseOperation = function (operation) {
+        return parseOperation(getStack(), operation);
+    }
+    const parseOperation = function(stack, operation) {
         if (operation in operations) {
-            let n = [];
-            let expr = nextExpr();
-            while (i < expression.length && expr !== ')') {
-                n.push(identificationParse(expr));
-                expr = nextExpr();
-            }
-            if (expr === ')') {
-                if (n.length !== lengthOfOperation[operation]) {
+            if (expression[i - 1] === ')') {
+                if (isCorrectLength(stack.length, operation)) {
+                    return new operations[operation](...stack);
+                } else {
                     throw new Error("Expected " + lengthOfOperation[operation] + " values for "
                         + operation);
                 }
-                return new operations[operation](...n);
             } else {
                 throw new Error("Expected ) for " + operation);
             }
         } else {
             throw new Error(operation + " is an unknown operation");
         }
+    }
+    const getStack = function () {
+        let stack = [];
+        let expr = nextExpr();
+        while (i < expression.length && expr !== ')' && !(expr in operations)) {
+            stack.push(identificationParse(expr));
+            expr = nextExpr();
+        }
+        return stack;
     };
     const ans = identificationParse(nextExpr());
     if (i < expression.length) {
