@@ -32,11 +32,16 @@ Operation.prototype.prefix = function () {
     return "(" + this.sign + " " + this.exprs.map((expr) => expr.prefix()).join(" ") + ")";
 }
 
+Operation.prototype.postfix = function () {
+    return "(" + this.exprs.map((expr) => expr.postfix()).join(" ") + " " + this.sign +  ")";
+}
+
 const AbstractValue = (evaluate, diff) => function (value) {
     this.evaluate = (...values) => evaluate(value, ...values);
     this.toString = () => value.toString();
     this.diff = (variable) => diff(value, variable);
     this.prefix = this.toString;
+    this.postfix = this.toString;
 };
 
 const Const = AbstractValue((value) => value, () => Consts.ZERO);
@@ -84,21 +89,36 @@ const Gauss = abstractOperation("gauss",
             new Multiply(new Subtract(x, b), new Subtract(x, b)), new Multiply(Consts.NEGATETWO,
                 new Multiply(c, c))).diff(variable)))));
 
-const sum = function (...values) {
-    let s = 0;
-    for (let i = 0; i < values.length; i++) {
-        s += values[i];
-    }
-    return s / values.length;
-}
+const mean = (...values) => values.reduce(sum, 0) / values.length;
 
 const Mean = abstractOperation("mean",
-    (...values) => sum(...values));
+    mean,
+    function (...values) {
+        let exprs = values.splice(values.length / 2, values.length / 2);
+        if (exprs.length === 0) {
+            return Consts.ZERO;
+        }
+        let ans = exprs[0];
+        for (let i = 1; i < exprs.length; i++) {
+            ans = new Add(ans, exprs[i]);
+        }
+        return new Divide(ans, new Const(exprs.length));
+    });
 
 
 const Var = abstractOperation("var",
-    (...values) => -(sum(...values) ** 2) + (sum(...values.map((value) =>
-        value * value))));
+    function (...values) {
+        const mn = mean(...values);
+        return mean(...values.map((expr) => (expr - mn) ** 2));
+    },
+    function (...values) {
+        let variable = values.pop();
+        let exprs = values.splice(0, values.length / 2);
+        let left = new Mean(...exprs.map((expr) => new Multiply(expr, expr))).diff(variable);
+        let right = new Mean(...exprs);
+        right = new Multiply(right, right).diff(variable);
+        return new Subtract(left, right);
+    });
 
 const operations = {
     "+": Add,
@@ -149,19 +169,25 @@ const parse = function (expression) {
 };
 
 const parsePrefix = function (expression) {
+    return parseFix(expression, function(getStack, parseFunc, nextExpr) {
+        const operation = nextExpr();
+        return parseFunc(getStack(), operation);
+    });
+}
+
+const parsePostfix = function (expression) {
+    return parseFix(expression, (getStack, parseFunc, nextExpr, thisExpr) => parseFunc(getStack(), thisExpr()));
+}
+
+const parseFix = function (expression, parseFunc) {
     expression = expression.replace(/[(, )]/g, (expr) => " " + expr + " ").split(" ").
     filter((string) => string.length > 0);
     let i = 0;
     const nextExpr = () => expression[i++];
+    const thisExpr = () => expression[i - 1];
     const identificationParse = function (expr) {
         if (expr === '(') {
-            const expr = nextExpr();
-            if (expr in operations) {
-                return prefixParseOperation(expr);
-            } else {
-                i--;
-                return postfixParseOperation();
-            }
+            return parseFunc(getStack, parseOperation, nextExpr, thisExpr);
         } else {
             if (expr in variables) {
                 return new Variable(expr);
@@ -169,38 +195,28 @@ const parsePrefix = function (expression) {
                 if (!isNaN(expr)) {
                     return new Const(parseInt(expr));
                 } else {
-                    throw new Error("Unknown string " + expr);
+                    throw new Error("Unknown string " + expr + " in position " + i);
                 }
             }
         }
     };
-    const postfixParseOperation = function () {
-        let stack = getStack();
-        i--;
-        let operation = nextExpr();
-        if (nextExpr() === ')') {
-            return parseOperation(stack, operation);
-        } else {
-            throw new Error("After " + operation + " expected )");
-        }
-    };
-    const prefixParseOperation = function (operation) {
-        return parseOperation(getStack(), operation);
-    }
     const parseOperation = function(stack, operation) {
+        if (nextExpr() !== ')') {
+            throw new Error("After " + operation + " expected ) in position " + i);
+        }
         if (operation in operations) {
             if (expression[i - 1] === ')') {
                 if (isCorrectLength(stack.length, operation)) {
                     return new operations[operation](...stack);
                 } else {
                     throw new Error("Expected " + lengthOfOperation[operation] + " values for "
-                        + operation);
+                        + operation + " but detect " + stack.length + " values in position " + i);
                 }
             } else {
-                throw new Error("Expected ) for " + operation);
+                throw new Error("Expected ) for " + operation + " in position " + i);
             }
         } else {
-            throw new Error(operation + " is an unknown operation");
+            throw new Error(operation + " in position " + i + " is an unknown operation");
         }
     }
     const getStack = function () {
@@ -214,7 +230,9 @@ const parsePrefix = function (expression) {
     };
     const ans = identificationParse(nextExpr());
     if (i < expression.length) {
-        throw new Error("Expected " + expression[i] + ", which cannot be parsed");
+        throw new Error("Expected " + expression[i] + " in position " + i + ", which cannot be parsed");
     }
     return ans;
 };
+
+const sum = (s, expr) => s + expr;
