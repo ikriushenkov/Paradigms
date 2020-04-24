@@ -1,6 +1,6 @@
 "use strict";
 
-const abstractOperation = function(sign, apply, applyDiff) {
+function abstractOperation(sign, apply, applyDiff) {
     const op = function(...exprs) {
         return Operation.apply(this, exprs);
     };
@@ -9,7 +9,7 @@ const abstractOperation = function(sign, apply, applyDiff) {
     op.prototype.apply = apply;
     op.prototype.applyDiff = applyDiff;
     return op;
-};
+}
 
 function Operation(...exprs) {
     this.exprs = exprs;
@@ -46,7 +46,6 @@ const AbstractValue = (evaluate, diff) => function (value) {
 
 const Const = AbstractValue((value) => value, () => Consts.ZERO);
 
-// :NOTE: Const.ZERO
 const Consts = {"ZERO" : new Const(0),
     "ONE": new Const(1),
     "NEGATETWO": new Const(-2)};
@@ -148,7 +147,7 @@ const anyLength = {
 const isCorrectLength = (length, operation) => (operation in anyLength) ? true :
     length === lengthOfOperation[operation];
 
-const parse = function (expression) {
+function parse(expression) {
     expression = expression.split(" ").filter((string) => string.length > 0);
     let stack = [];
     for (let i = 0; i < expression.length; i++) {
@@ -166,22 +165,48 @@ const parse = function (expression) {
         stack.push(expr);
     }
     return stack.pop();
-};
+}
 
-const parsePrefix = function (expression) {
+function createError(name, message) {
+    let Err = function (...values) {
+        Error.call(this, message(...values));
+    };
+    Err.prototype = Object.create(Error.prototype);
+    Err.prototype.name = name;
+    return Err;
+}
+
+const EmptyExpressionError = createError("EmptyExpressionError", () => "Empty expression");
+
+const IllegalStringError = createError("IllegalStringError", (string, index) => "Illegal string " + string +
+    " at position " + index);
+
+const MissingClosingParenthesisError = createError("MissingClosingParenthesisError", (index) =>
+    "Expected closing parenthesis at position " + index);
+
+const WrongLengthOperationError = createError("WrongLengthOperationError", (operation, length, index) =>
+    "Expected " + lengthOfOperation[operation] + " values for " + operation + " but detect " + length + " values in position " + index);
+
+const IllegalOperationError = createError("IllegalOperationError", (operation, index) => "Illegal operation " +
+    operation + " at position " + index);
+
+function parsePrefix(expression) {
     return parseFix(expression, function(getStack, parseFunc, nextExpr) {
         const operation = nextExpr();
         return parseFunc(getStack(), operation);
     });
 }
 
-const parsePostfix = function (expression) {
-    return parseFix(expression, (getStack, parseFunc, nextExpr, thisExpr) => parseFunc(getStack(), thisExpr()));
+function parsePostfix(expression) {
+    return parseFix(expression, (getStack, parseFunc, nextExpr, thisExpr) => parseFunc(getStack(), thisExpr(), nextExpr()));
 }
 
-const parseFix = function (expression, parseFunc) {
+function parseFix(expression, parseFunc) {
     expression = expression.replace(/[(, )]/g, (expr) => " " + expr + " ").split(" ").
     filter((string) => string.length > 0);
+    if (expression.length === 0) {
+        throw new EmptyExpressionError().toString();
+    }
     let i = 0;
     const nextExpr = () => expression[i++];
     const thisExpr = () => expression[i - 1];
@@ -195,28 +220,24 @@ const parseFix = function (expression, parseFunc) {
                 if (!isNaN(expr)) {
                     return new Const(parseInt(expr));
                 } else {
-                    throw new Error("Unknown string " + expr + " in position " + i);
+                    throw new IllegalStringError(expr, i).toString();
                 }
             }
         }
     };
     const parseOperation = function(stack, operation) {
-        if (nextExpr() !== ')') {
-            throw new Error("After " + operation + " expected ) in position " + i);
-        }
         if (operation in operations) {
-            if (expression[i - 1] === ')') {
+            if (thisExpr() === ')') {
                 if (isCorrectLength(stack.length, operation)) {
                     return new operations[operation](...stack);
                 } else {
-                    throw new Error("Expected " + lengthOfOperation[operation] + " values for "
-                        + operation + " but detect " + stack.length + " values in position " + i);
+                    throw new WrongLengthOperationError(operation, stack.length, i).toString();
                 }
             } else {
-                throw new Error("Expected ) for " + operation + " in position " + i);
+                throw new MissingClosingParenthesisError(i).toString();
             }
         } else {
-            throw new Error(operation + " in position " + i + " is an unknown operation");
+            throw new IllegalOperationError(operation, i).toString();
         }
     }
     const getStack = function () {
@@ -230,9 +251,9 @@ const parseFix = function (expression, parseFunc) {
     };
     const ans = identificationParse(nextExpr());
     if (i < expression.length) {
-        throw new Error("Expected " + expression[i] + " in position " + i + ", which cannot be parsed");
+        throw new IllegalStringError(expression[i], i).toString();
     }
     return ans;
-};
+}
 
 const sum = (s, expr) => s + expr;
