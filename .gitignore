@@ -3,5 +3,3 @@ out/*
 base/*
 *.iml
 *Test.java
-.gitignore
-readme.md
