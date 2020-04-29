@@ -1,4 +1,4 @@
-package arrayQueue;
+package queue;
 
 public class TestArrayQueueModule {
     public static void fill() {
