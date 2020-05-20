@@ -1,111 +1,111 @@
-(defn equalLength [& vectors] (apply = (mapv count vectors)))
+(defn equal-length [& vectors] (apply = (apply mapv count vectors)))
 
-(defn isNumbers [& numbers] (every? identity (mapv number? numbers)))
+(defn is-numbers [& numbers] (apply every? number? numbers))
 
-(defn isVector [vector] (and (vector? vector) (apply isNumbers vector)))
+(defn is-vector [vector] (and (vector? vector) (is-numbers vector)))
 
-(defn isVectors [& vectors] (every? identity (mapv isVector vectors)))
+(defn is-vectors [& vectors] (apply every? is-vector vectors))
 
-(defn isMatrix [matrix] (and (vector? matrix) (apply isVectors matrix)))
+(defn is-matrix [matrix] (and (vector? matrix) (is-vectors matrix)))
 
-(defn isMatrixes [& matrix] (every? identity (mapv isMatrix matrix)))
+(defn is-matrices [& matrix] (apply every? is-matrix matrix))
 
-(defn neutralElement [operation] (if (or (= operation +) (= operation -)) 0 1))
+(defn equal-size-matrix [& matriсes] (and (apply every? equal-length matriсes)
+                                          equal-length matriсes
+                                          (apply == (mapv (comp count first) matriсes))))
 
-(defn equalSizeMatrix [& matrix] (and (every? identity (mapv (fn [a] (apply = (mapv count a))) matrix))
-                                      (apply = (mapv count matrix)) (apply = (mapv (fn [a] (count (first a))) matrix))))
+(defn vect? [tensor] (or (number? tensor) (vector? tensor) (and (instance? clojure.lang.Repeat tensor) (vect? (apply vector tensor)))))
 
-(defn vect? [tensor] (or (number? tensor) (vector? tensor) (instance? clojure.lang.Repeat tensor)))
+(def get-shape (memoize (fn [tensor]
+    {:pre [(vect? tensor)]
+     :post [(vector? %)]}
+    (if (number? tensor) [] (conj (get-shape (first tensor)) (count tensor))))))
 
-(defn getForm [tensor]
-      {:pre [(vect? tensor)]
-       :post [(vector? %)]}
-      (if (number? tensor) [] (conj (getForm (first tensor)) (count tensor))))
+(defn is-tensor [tensor] (or (number? tensor) (is-vector tensor) (and (vector? tensor) (apply = (mapv get-shape tensor)) (equal-length tensor))))
 
-(defn isTensor [tensor] (or (number? tensor) (isVector tensor) (and (vector? tensor) (apply = (mapv getForm tensor)) (apply equalLength tensor))))
+(defn is-tensors [& tensors] (apply every? is-tensor tensors))
 
-(defn isTensors [& tensors] (every? identity (mapv isTensor tensors)))
+(defn vector-operation [operation]
+  (fn [& vectors]
+    {:pre [(is-vectors vectors) (equal-length vectors)]
+     :post [(is-vector %)]}
+    (apply mapv operation vectors)))
 
-(defn vectorOperation [operation]
-      (fn [& vectors]
-          {:pre [(apply isVectors vectors) (apply equalLength vectors)]
-           :post [(isVector %)]}
-          (apply mapv operation vectors)))
-
-(def v+ (vectorOperation +))
-
-(def v- (vectorOperation -))
-
-(def v* (vectorOperation *))
+(def v+ (vector-operation +))
+(def v- (vector-operation -))
+(def v* (vector-operation *))
 
 (defn scalar [& vectors]
-      {:pre [(apply isVectors vectors) (apply equalLength vectors)]
-       :post [(number? %)]}
-      (reduce + (apply v* vectors)))
+  {:pre [(is-vectors vectors) (equal-length vectors)]
+   :post [(number? %)]}
+  (reduce + (apply v* vectors)))
 
 (defn vect [& vectors]
-      {:pre [(apply isVectors vectors) (apply equalLength vectors) (= (count (first vectors)) 3)]
-       :post [(isVector %)]}
-      (letfn [
-              (vect' [a, b]
-                     [(- (* (nth a 1) (nth b 2)) (* (nth a 2) (nth b 1))),
-                      (- (* (nth a 2) (nth b 0)) (* (nth a 0) (nth b 2))),
-                      (- (* (nth a 0) (nth b 1)) (* (nth a 1) (nth b 0)))])]
-             (reduce vect' vectors)))
+  {:pre [(is-vectors vectors) (equal-length vectors) (= (count (first vectors)) 3)]
+   :post [(is-vector %)]}
+  (letfn [
+                               (vect' [a, b]
+                                 [(- (* (nth a 1) (nth b 2)) (* (nth a 2) (nth b 1))),
+                                  (- (* (nth a 2) (nth b 0)) (* (nth a 0) (nth b 2))),
+                                  (- (* (nth a 0) (nth b 1)) (* (nth a 1) (nth b 0)))])]
+  (reduce vect' vectors)))
 
 (defn v*s [v, & s]
-      {:pre [(isVector v) (apply isNumbers s)]
-       :post [(isVector %)]}
-      (mapv (partial * (reduce * s)) v))
+  {:pre [(is-vector v) (is-numbers s)]
+   :post [(is-vector %)]}
+  (let [mul (apply * s)] (mapv (partial * mul) v)))
 
-(defn matrixOperation [operation]
-      (fn [& matrix]
-          {:pre [(apply isMatrixes matrix) (apply equalSizeMatrix matrix)]
-           :post [(isMatrix %)]}
-          (apply mapv (vectorOperation operation) matrix)))
+(defn matrix-operation [operation]
+  (fn [& matrix]
+    {:pre [(is-matrices matrix) (equal-size-matrix matrix)]
+     :post [(is-matrix %)]}
+    (apply mapv (vector-operation operation) matrix)))
 
-(def m+ (matrixOperation +))
-
-(def m- (matrixOperation -))
-
-(def m* (matrixOperation *))
+(def m+ (matrix-operation +))
+(def m- (matrix-operation -))
+(def m* (matrix-operation *))
 
 (defn m*s [m, & s]
-      {:pre [(isMatrix m) (apply isNumbers s)]
-       :post [(isMatrix %)]}
-      (mapv (fn [v] (apply v*s v s)) m))
+  {:pre [(is-matrix m) (is-numbers s)]
+   :post [(is-matrix %)]}
+  (let [mul (apply * s)] (mapv (fn [v] (v*s v mul)) m)))
 
 (defn m*v [m, v]
-      {:pre [(isMatrix m) (isVector v) (= (count (first m)) (count v))]
-       :post [(isVector %)]}
-      (mapv (partial scalar v) m))
+  {:pre [(is-matrix m) (is-vector v) (= (count (first m)) (count v))]
+   :post [(is-vector %)]}
+  (mapv (partial scalar v) m))
 
 (defn transpose [matrix]
-      {:pre [(isMatrix matrix)]
-       :post [(isMatrix %)]}
-      (if (= (count (peek matrix)) 1) (vector (mapv peek matrix))
-                                      (conj (transpose (mapv pop matrix)) (mapv peek matrix))))
+  {:pre [(is-matrix matrix)]
+   :post [(is-matrix %)]}
+  (if (= (count (peek matrix)) 1) (vector (mapv peek matrix))
+                                                         (conj (transpose (mapv pop matrix)) (mapv peek matrix))))
 
 (defn m*m [& matrix]
-      {:pre [(apply isMatrixes matrix)]
-       :post [(isMatrix %)]}
-      (reduce (fn [a, b] (mapv (partial m*v (transpose b)) a)) matrix))
+  {:pre [(is-matrices matrix)]
+   :post [(is-matrix %)]}
+  (reduce (fn [a, b] (mapv (partial m*v (transpose b)) a)) matrix))
 
-(defn tensorOperation [operation] (fn [& tensors]
-      {:pre [(apply isTensors tensors)]
-       :post [(isTensor %)]}
-      (letfn [
-              (broadcast [a, b] (cond (= (getForm a) (getForm b)) (evaluate a b)
-                               (> (count (getForm a)) (count (getForm b))) (broadcast a (repeat (nth (getForm a) (count (getForm b))) b))
-                               else (broadcast (repeat (nth (getForm b) (count (getForm a))) a) b)))
-              (evaluate [& tensor] (if (apply isNumbers tensor) (if (= (count tensor) 1) (operation (first tensor)) (reduce operation tensor))
-                                                                                                (apply mapv (partial evaluate) tensor)))
-              ] (if (= (count tensors) 1) (apply (tensorOperation operation) (neutralElement operation) tensors) (reduce (partial broadcast) tensors)))))
+(defn is-prefix [a, b] (= (drop-last (- (count a) (count b)) a) (drop-last (- (count b) (count a)) b)))
 
-(def b+ (tensorOperation +))
+(defn is-prefixes [& shapes] (if (= (count shapes) 1) true (and (is-prefix (first shapes) (nth shapes 1)) (apply is-prefixes (next shapes)))))
 
-(def b- (tensorOperation -))
+(defn tensor-operation [operation] (fn [& tensors]
+    {:pre [(is-tensors tensors) (apply is-prefixes (mapv get-shape tensors))]
+     :post [(is-tensor %)]}
+    (letfn [
+            (broadcast [a, b]
+              (let [shape-a (get-shape a) shape-b (get-shape b)]
+              (cond (= shape-a shape-b) (evaluate a b)
+                        (> (count shape-a) (count shape-b)) (broadcast a (repeat (nth shape-a (count shape-b)) b))
+                         :else (broadcast (repeat (nth shape-b (count shape-a)) a) b))))
+            (evaluate [& tensor] (if (is-numbers tensor) (apply operation tensor) (apply mapv (partial evaluate) tensor)))
+            ] (if (= (count tensors) 1) (evaluate (first tensors)) (reduce (partial broadcast) tensors)))))
 
-(def b* (tensorOperation *))
+(def b+ (tensor-operation +))
 
-(def bd (tensorOperation /))
+(def b- (tensor-operation -))
+
+(def b* (tensor-operation *))
+
+(def bd (tensor-operation /))
