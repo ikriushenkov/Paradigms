@@ -103,7 +103,6 @@ class Board {
             this.cells[i][j] = '_';
         }
         this.empty--;
-        // :NOTE: * Нет дополнительного хода за закрашивание квадрата
         return this.checkWin(move.getCell());
     }
 
@@ -164,7 +163,6 @@ class Game {
         return bestPlayer;
     }
     move(board, player) {
-        // :NOTE: # Нет проверки корректности хода
         let move = player.move(board);
         return board.makeMove(move);
     }
